@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"os"
 
 	"github.com/akigithub888/aggreGATOR/internal/config"
 )
@@ -10,17 +10,31 @@ import (
 func main() {
 	cfg, err := config.Read()
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println("Error reading config:", err)
+		os.Exit(1)
 	}
 
-	err = cfg.SetUser("aleksa")
-	if err != nil {
-		log.Fatal(err)
+	appState := state{
+		cfg: &cfg,
 	}
 
-	cfg, err = config.Read()
-	if err != nil {
-		log.Fatal(err)
+	cmds := commands{
+		handlers: make(map[string]func(*state, command) error),
 	}
-	fmt.Printf("%+v\n", cfg)
+	cmds.register("login", handlerLogin)
+
+	if len(os.Args) < 2 {
+		fmt.Println("Not enough arguments were provided")
+		os.Exit(1)
+	}
+
+	cmd := command{
+		name: os.Args[1],
+		args: os.Args[2:],
+	}
+
+	if err := cmds.run(&appState, cmd); err != nil {
+		fmt.Println("Command error:", err)
+		os.Exit(1)
+	}
 }
