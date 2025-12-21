@@ -1,10 +1,14 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/akigithub888/aggreGATOR/internal/config"
+	"github.com/akigithub888/aggreGATOR/internal/database"
+	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -13,15 +17,24 @@ func main() {
 		fmt.Println("Error reading config:", err)
 		os.Exit(1)
 	}
+	dbURL := "postgres://postgres:postgres@localhost:5432/gator"
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	dbQueries := database.New(db)
 
 	appState := state{
 		cfg: &cfg,
+		db:  dbQueries,
 	}
 
 	cmds := commands{
 		handlers: make(map[string]func(*state, command) error),
 	}
 	cmds.register("login", handlerLogin)
+	cmds.register("register", handlerRegister)
 
 	if len(os.Args) < 2 {
 		fmt.Println("Not enough arguments were provided")

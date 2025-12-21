@@ -1,0 +1,17 @@
+for migrations:
+
+goose postgres postgres://postgres:postgres@localhost:5432/gator up/down
+
+# example:
+# goose postgres """ up
+
+
+to start the service run
+
+sudo service postgresql start
+
+
+to see if it works:
+
+psql postgres://postgres:postgres@localhost:5432/gator
+
