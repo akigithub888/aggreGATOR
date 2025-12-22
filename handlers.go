@@ -26,6 +26,42 @@ type commands struct {
 	handlers map[string]func(*state, command) error
 }
 
+func handlerGetUsers(s *state, cmd command) error {
+	if len(cmd.args) != 0 {
+		return fmt.Errorf("users does not take any arguments")
+	}
+	ctx := context.Background()
+	users, err := s.db.GetUsers(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get all users: %w", err)
+	}
+	for _, user := range users {
+		if s.cfg.CurrentUserName == user.Name {
+			fmt.Printf("* %s (current)\n", user.Name)
+		} else {
+			fmt.Printf("* %s\n", user.Name)
+		}
+	}
+	return nil
+}
+
+func handlerReset(s *state, cmd command) error {
+	if len(cmd.args) != 0 {
+		return fmt.Errorf("reset does not take any arguments")
+	}
+	ctx := context.Background()
+	err := s.db.DeleteAllUsers(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to reset users: %w", err)
+	}
+	s.cfg.CurrentUserName = ""
+	if err := config.Write(*s.cfg); err != nil {
+		return fmt.Errorf("failed to clear config: %w", err)
+	}
+	fmt.Println("All users have been deleted.")
+	return nil
+}
+
 func handlerRegister(s *state, cmd command) error {
 	if len(cmd.args) != 1 {
 		return fmt.Errorf("username is required")
