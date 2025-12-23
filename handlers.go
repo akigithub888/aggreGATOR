@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -24,6 +25,21 @@ type command struct {
 
 type commands struct {
 	handlers map[string]func(*state, command) error
+}
+
+func handlerAgg(s *state, cmd command) error {
+	if len(cmd.args) != 0 {
+		return fmt.Errorf("Agg does not take any arguments")
+	}
+	ctx := context.Background()
+	url := "https://www.wagslane.dev/index.xml"
+	feed, err := fetchFeed(ctx, url)
+	if err != nil {
+		return fmt.Errorf("unable to fetchFeed: %w", err)
+	}
+	b, _ := json.MarshalIndent(feed, "", " ")
+	fmt.Println(string(b))
+	return nil
 }
 
 func handlerGetUsers(s *state, cmd command) error {
