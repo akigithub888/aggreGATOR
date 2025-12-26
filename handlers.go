@@ -27,6 +27,43 @@ type commands struct {
 	handlers map[string]func(*state, command) error
 }
 
+func handlerAddFeed(s *state, cmd command) error {
+	if len(cmd.args) != 2 {
+		return fmt.Errorf("usage: addfeed <name> <url>")
+	}
+
+	name := cmd.args[0]
+	url := cmd.args[1]
+
+	ctx := context.Background()
+
+	user, err := s.db.GetUserByName(ctx, s.cfg.CurrentUserName)
+	if err != nil {
+		return fmt.Errorf("failed to get current user: %w", err)
+	}
+
+	feed, err := s.db.CreateFeed(ctx, database.CreateFeedParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Name:      name,
+		Url:       url,
+		UserID:    user.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create feed: %w", err)
+	}
+	fmt.Println("Feed created:")
+	fmt.Printf("  ID: %s\n", feed.ID)
+	fmt.Printf("  Name: %s\n", feed.Name)
+	fmt.Printf("  URL: %s\n", feed.Url)
+	fmt.Printf("  User ID: %s\n", feed.UserID)
+	fmt.Printf("  Created At: %s\n", feed.CreatedAt)
+	fmt.Printf("  Updated At: %s\n", feed.UpdatedAt)
+
+	return nil
+}
+
 func handlerAgg(s *state, cmd command) error {
 	if len(cmd.args) != 0 {
 		return fmt.Errorf("Agg does not take any arguments")
