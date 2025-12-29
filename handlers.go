@@ -27,13 +27,8 @@ type commands struct {
 	handlers map[string]func(*state, command) error
 }
 
-func handlerFollowing(s *state, cmd command) error {
+func handlerFollowing(s *state, cmd command, user database.GetUserByNameRow) error {
 	ctx := context.Background()
-
-	user, err := s.db.GetUserByName(ctx, s.cfg.CurrentUserName)
-	if err != nil {
-		return fmt.Errorf("current user not found")
-	}
 
 	follows, err := s.db.GetFeedFollowsForUser(ctx, user.ID)
 	if err != nil {
@@ -53,17 +48,12 @@ func handlerFollowing(s *state, cmd command) error {
 	return nil
 }
 
-func handlerFollow(s *state, cmd command) error {
+func handlerFollow(s *state, cmd command, user database.GetUserByNameRow) error {
 	if len(cmd.args) < 1 {
 		return fmt.Errorf("usage: follow <feed_url>")
 	}
 	ctx := context.Background()
 	feedURL := cmd.args[0]
-
-	user, err := s.db.GetUserByName(ctx, s.cfg.CurrentUserName)
-	if err != nil {
-		return fmt.Errorf("current user not found")
-	}
 
 	feed, err := s.db.GetFeedByURL(ctx, feedURL)
 	if err != nil {
@@ -110,7 +100,7 @@ func handlerFeeds(s *state, cmd command) error {
 	return nil
 }
 
-func handlerAddFeed(s *state, cmd command) error {
+func handlerAddFeed(s *state, cmd command, user database.GetUserByNameRow) error {
 	if len(cmd.args) != 2 {
 		return fmt.Errorf("usage: addfeed <name> <url>")
 	}
@@ -119,11 +109,6 @@ func handlerAddFeed(s *state, cmd command) error {
 	url := cmd.args[1]
 
 	ctx := context.Background()
-
-	user, err := s.db.GetUserByName(ctx, s.cfg.CurrentUserName)
-	if err != nil {
-		return fmt.Errorf("failed to get current user: %w", err)
-	}
 
 	feed, err := s.db.CreateFeed(ctx, database.CreateFeedParams{
 		ID:        uuid.New(),
