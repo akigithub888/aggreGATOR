@@ -27,6 +27,29 @@ type commands struct {
 	handlers map[string]func(*state, command) error
 }
 
+func handlerUnfollow(s *state, cmd command, user database.GetUserByNameRow) error {
+	if len(cmd.args) < 1 {
+		return fmt.Errorf("usage: Unfollow <feeed_url>")
+	}
+
+	ctx := context.Background()
+
+	feed, err := s.db.GetFeedByURL(ctx, cmd.args[0])
+	if err != nil {
+		return fmt.Errorf("feed not found")
+	}
+	err = s.db.DeleteFeedFollow(ctx, database.DeleteFeedFollowParams{
+		UserID: user.ID,
+		FeedID: feed.ID,
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Unfollowed:", feed.Name)
+	return nil
+}
+
 func handlerFollowing(s *state, cmd command, user database.GetUserByNameRow) error {
 	ctx := context.Background()
 
