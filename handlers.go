@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -25,6 +24,27 @@ type command struct {
 
 type commands struct {
 	handlers map[string]func(*state, command) error
+}
+
+func scrapeFeeds(s *state) error {
+	ctx := context.Background()
+
+	feed, err := s.db.GetNextFeedToFetch(ctx)
+	if err != nil {
+		return err
+	}
+	err = s.db.MarkFeedFetched(ctx, feed.ID)
+	if err != nil {
+		return err
+	}
+	rss, err := fetchFeed(ctx, feed.Url)
+	if err != nil {
+		return err
+	}
+	for _, item := range rss.Channel.Item {
+		fmt.Println(item.Title)
+	}
+	return nil
 }
 
 func handlerUnfollow(s *state, cmd command, user database.GetUserByNameRow) error {
@@ -165,18 +185,25 @@ func handlerAddFeed(s *state, cmd command, user database.GetUserByNameRow) error
 }
 
 func handlerAgg(s *state, cmd command) error {
-	if len(cmd.args) != 0 {
-		return fmt.Errorf("Agg does not take any arguments")
+	if len(cmd.args) != 1 {
+		return fmt.Errorf("usage: agg <time_between_reqs>")
 	}
-	ctx := context.Background()
-	url := "https://www.wagslane.dev/index.xml"
-	feed, err := fetchFeed(ctx, url)
+	duration, err := time.ParseDuration(cmd.args[0])
 	if err != nil {
-		return fmt.Errorf("unable to fetchFeed: %w", err)
+		return err
 	}
-	b, _ := json.MarshalIndent(feed, "", " ")
-	fmt.Println(string(b))
-	return nil
+	fmt.Printf("Collecting feeds every %s\n", duration)
+	ticker := time.NewTicker(duration)
+	defer ticker.Stop()
+
+	for {
+		err := scrapeFeeds(s)
+		if err != nil {
+			fmt.Println("scrape error:", err)
+		}
+
+		<-ticker.C
+	}
 }
 
 func handlerGetUsers(s *state, cmd command) error {
