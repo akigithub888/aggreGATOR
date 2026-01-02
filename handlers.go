@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"log"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/akigithub888/aggreGATOR/internal/config"
@@ -26,6 +29,49 @@ type commands struct {
 	handlers map[string]func(*state, command) error
 }
 
+func handlerBrowse(s *state, cmd command, user database.GetUserByNameRow) error {
+	limit := 2
+
+	// parse --limit flag
+	for i := 0; i < len(cmd.args); i++ {
+		if cmd.args[i] == "--limit" && i+1 < len(cmd.args) {
+			l, err := strconv.Atoi(cmd.args[i+1])
+			if err != nil {
+				return fmt.Errorf("invalid limit: %v", err)
+			}
+			limit = l
+			i++ // skip the value
+		}
+	}
+
+	// Use the user passed from middleware
+	params := database.GetPostsForUserParams{
+		UserID: user.ID,
+		Limit:  int32(limit),
+	}
+
+	posts, err := s.db.GetPostsForUser(context.Background(), params)
+	if err != nil {
+		return fmt.Errorf("failed to get posts: %v", err)
+	}
+
+	if len(posts) == 0 {
+		fmt.Println("No posts found.")
+		return nil
+	}
+
+	for _, post := range posts {
+		published := "unknown"
+		if post.PublishedAt.Valid {
+			published = post.PublishedAt.Time.Format("2006-01-02 15:04")
+		}
+		fmt.Printf("Title: %s\nURL: %s\nPublished: %s\n\n",
+			post.Title, post.Url, published)
+	}
+
+	return nil
+}
+
 func scrapeFeeds(s *state) error {
 	ctx := context.Background()
 
@@ -42,9 +88,68 @@ func scrapeFeeds(s *state) error {
 		return err
 	}
 	for _, item := range rss.Channel.Item {
-		fmt.Println(item.Title)
+		err := savePost(ctx, s, feed, item)
+		if err != nil {
+			log.Printf("error saving post from feed %s: %v", feed.Name, err)
+		}
 	}
 	return nil
+}
+
+func savePost(
+	ctx context.Context,
+	s *state,
+	feed database.GetNextFeedToFetchRow,
+	item RSSItem,
+) error {
+	publishedAt := parsePubDate(item.PubDate)
+
+	description := sql.NullString{
+		String: item.Description,
+		Valid:  item.Description != "",
+	}
+
+	_, err := s.db.CreatePost(ctx, database.CreatePostParams{
+		ID:          uuid.New(),
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+		Title:       item.Title,
+		Url:         item.Link,
+		Description: description,
+		PublishedAt: publishedAt,
+		FeedID:      feed.ID,
+	})
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil //duplicate post
+		}
+	}
+	return err
+}
+
+func parsePubDate(pubDate string) sql.NullTime {
+	if pubDate == "" {
+		return sql.NullTime{Valid: false}
+	}
+
+	layouts := []string{
+		time.RFC1123Z,
+		time.RFC1123,
+		time.RFC822Z,
+		time.RFC822,
+	}
+
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, pubDate); err == nil {
+			return sql.NullTime{
+				Time:  t,
+				Valid: true,
+			}
+		}
+	}
+
+	return sql.NullTime{Valid: false}
 }
 
 func handlerUnfollow(s *state, cmd command, user database.GetUserByNameRow) error {
